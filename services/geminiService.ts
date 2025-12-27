@@ -1,71 +1,97 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { Problem, EvaluationResult } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-export const evaluateCode = async (problem: Problem, code: string): Promise<EvaluationResult> => {
+export const evaluateCode = async (
+  problem: Problem,
+  code: string
+): Promise<EvaluationResult> => {
+  const testCasesPrompt = problem.testCases
+    .map(
+      (tc) =>
+        `Test Case ${tc.id}: Input: ${tc.input}, Expected Output: ${tc.expectedOutput}`
+    )
+    .join("\n");
+
   const prompt = `
-    You are an expert technical interviewer and competitive programmer. 
-    Evaluate the following solution for the problem: "${problem.title}".
+    Bạn là một hệ thống chấm bài lập trình tự động (Online Judge).
+    Hãy đánh giá code sau cho bài toán: "${problem.title}".
     
-    Problem Description: ${problem.description}
-    Constraints: ${problem.constraints.join(', ')}
+    Đề bài: ${problem.description}
+    Ràng buộc: ${problem.constraints.join(", ")}
     
-    User Code:
+    Danh sách các Test Cases cần kiểm tra:
+    ${testCasesPrompt}
+    
+    Code của người dùng:
     \`\`\`javascript
     ${code}
     \`\`\`
     
-    Please analyze if the code correctly solves the problem, its time and space complexity, and provide constructive feedback.
+    Yêu cầu:
+    1. Chạy thử code với TỪNG test case.
+    2. Nếu code có lỗi cú pháp, trả về Compilation Error.
+    3. Với mỗi test case, xác định status (Passed/Failed), output thực tế và thời gian chạy giả định (ms).
+    4. Trả về kết quả tổng quan (Accepted nếu pass hết, ngược lại là Wrong Answer).
   `;
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-3-pro-preview",
       contents: prompt,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
           properties: {
-            status: {
-              type: Type.STRING,
-              description: "One of: 'Accepted', 'Wrong Answer', 'Time Limit Exceeded', 'Compilation Error'",
-            },
-            score: {
-              type: Type.NUMBER,
-              description: "A score from 0 to 100 based on correctness and efficiency.",
-            },
-            feedback: {
-              type: Type.STRING,
-              description: "A concise summary of the code quality and correctness in Vietnamese.",
-            },
-            suggestions: {
+            status: { type: Type.STRING },
+            score: { type: Type.NUMBER },
+            feedback: { type: Type.STRING },
+            testResults: {
               type: Type.ARRAY,
-              items: { type: Type.STRING },
-              description: "A list of actionable improvements in Vietnamese.",
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  testCaseId: { type: Type.STRING },
+                  status: { type: Type.STRING },
+                  actualOutput: { type: Type.STRING },
+                  executionTime: { type: Type.NUMBER },
+                  message: { type: Type.STRING },
+                },
+                required: [
+                  "testCaseId",
+                  "status",
+                  "actualOutput",
+                  "executionTime",
+                ],
+              },
             },
-            optimizedCode: {
-              type: Type.STRING,
-              description: "An optimized version of the code.",
-            },
+            suggestions: { type: Type.ARRAY, items: { type: Type.STRING } },
+            optimizedCode: { type: Type.STRING },
           },
-          required: ["status", "score", "feedback", "suggestions", "optimizedCode"],
+          required: [
+            "status",
+            "score",
+            "feedback",
+            "testResults",
+            "suggestions",
+            "optimizedCode",
+          ],
         },
       },
     });
 
-    const result = JSON.parse(response.text);
-    return result as EvaluationResult;
+    return JSON.parse(response.text) as EvaluationResult;
   } catch (error) {
-    console.error("Error evaluating code:", error);
+    console.error("Evaluation Error:", error);
     return {
-      status: 'Compilation Error',
+      status: "Compilation Error",
       score: 0,
-      feedback: "Đã xảy ra lỗi khi kết nối với hệ thống chấm bài. Vui lòng thử lại sau.",
-      suggestions: ["Kiểm tra kết nối mạng", "Thử lại trong vài giây"],
-      optimizedCode: ""
+      feedback: "Lỗi hệ thống chấm bài.",
+      testResults: [],
+      suggestions: [],
+      optimizedCode: "",
     };
   }
 };

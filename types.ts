@@ -1,5 +1,19 @@
+export type Difficulty = "Easy" | "Medium" | "Hard";
 
-export type Difficulty = 'Easy' | 'Medium' | 'Hard';
+export interface TestCase {
+  id: string;
+  input: string;
+  expectedOutput: string;
+  isPublic: boolean;
+}
+
+export interface TestCaseResult {
+  testCaseId: string;
+  status: "Passed" | "Failed" | "Error";
+  actualOutput: string;
+  executionTime: number;
+  message?: string;
+}
 
 export interface Problem {
   id: string;
@@ -14,10 +28,15 @@ export interface Problem {
   }>;
   constraints: string[];
   initialCode: string;
+  testCases: TestCase[];
 }
 
 export interface EvaluationResult {
-  status: 'Accepted' | 'Wrong Answer' | 'Time Limit Exceeded' | 'Compilation Error';
+  status:
+    | "Accepted"
+    | "Wrong Answer"
+    | "Time Limit Exceeded"
+    | "Compilation Error";
   score: number;
   feedback: string;
   suggestions: string[];

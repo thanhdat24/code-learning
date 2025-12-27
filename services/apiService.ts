@@ -1,11 +1,7 @@
 import { User } from "../types";
 
 /**
- * Client-side DB service.
- *
- * IMPORTANT:
- * - Do NOT call MongoDB directly from the browser with connection strings/API keys.
- * - This service talks to YOUR backend (Express) at /api, then the backend talks to MongoDB.
+ * Client-side DB service talking to /api backend
  */
 
 type ApiErrorBody = { error?: string; details?: unknown };
@@ -43,19 +39,24 @@ export const dbService = {
     const safe = username.trim();
     if (!safe) return null;
 
-    const res = await fetch(`/api/users/${encodeURIComponent(safe)}`);
-    if (res.status === 404) return null;
-    if (!res.ok) {
-      const body = (await parseJsonSafe<ApiErrorBody>(res)) ?? {};
-      throw new Error(body.error || `HTTP ${res.status} ${res.statusText}`);
+    try {
+      const res = await fetch(`/api/users/${encodeURIComponent(safe)}`);
+      if (res.status === 404) return null;
+      if (!res.ok) {
+        const body = (await parseJsonSafe<ApiErrorBody>(res)) ?? {};
+        throw new Error(body.error || `HTTP ${res.status} ${res.statusText}`);
+      }
+      const data = await parseJsonSafe<User>(res);
+      return data;
+    } catch (error) {
+      console.error("Error fetching user:", error);
+      throw error;
     }
-    const data = await parseJsonSafe<User>(res);
-    if (data == null) throw new Error("Server returned invalid JSON");
-    return data;
   },
 
   async saveUser(user: User): Promise<boolean> {
-    await requestJson<{ ok: true }>(`/api/users/${encodeURIComponent(user.username)}`,
+    await requestJson<{ ok: true }>(
+      `/api/users/${encodeURIComponent(user.username)}`,
       {
         method: "PUT",
         body: JSON.stringify(user),
